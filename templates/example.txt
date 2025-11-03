@@ -1,0 +1,8 @@
+Hi! I’m Nikita — I help small teams fix security basics and automate repetitive work.
+
+Today I’ll show you a quick tip:
+• Replace SMS 2FA with an app or security key
+• Use a password manager with shared vaults
+• Set up weekly cloud backups
+
+Simple steps. Strong protection. Let’s get started.
