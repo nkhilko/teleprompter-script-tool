@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Improved Safari Teleprompter</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        /* Global styles for the body and root elements */
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #000;
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Container for the entire application */
+        .container {
+            display: flex;
+            flex-direction: column;
+            flex-grow: 1;
+            padding: 20px;
+            max-width: 900px;
+            margin: 0 auto;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        /* Styles for the fixed-size guide box, now a flex container */
+        .guide-box {
+            width: 60vmin;
+            height: calc(60vmin * (2/3));
+            background-color: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            margin: 0 auto 20px auto;
+            display: flex;
+            flex-direction: column; /* Use column to allow normal text flow */
+            justify-content: flex-start; /* Default alignment for text content */
+            flex-shrink: 0;
+            position: relative;
+            overflow: hidden;
+            box-sizing: border-box;
+            cursor: text; /* Change cursor to text when over the box */
+            user-select: text; /* Allow text selection */
+        }
+        
+        /* New class to vertically center content and cursor when the box is empty */
+        .guide-box.empty-state-container {
+            justify-content: center;
+        }
+
+        /* The actual text content inside the teleprompter - now editable */
+        #teleprompter-text {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            will-change: transform;
+            transition: transform 0.05s linear;
+            text-align: left;
+            position: relative;
+            top: 0;
+            transform: translateY(0);
+            padding: 0 10px;
+            box-sizing: border-box;
+            width: 100%;
+            font-size: 4vmin;
+            line-height: 1.6;
+            outline: none; /* Remove the default focus outline */
+            -webkit-user-modify: read-write;
+            user-modify: read-write;
+            /* Add padding to the bottom to allow the last lines to scroll up past the center */
+            padding-bottom: 50%;
+            min-height: 1.6em; /* Ensure the cursor is always visible */
+        }
+
+        /* Placeholder for the editable div when empty */
+        #teleprompter-text:empty::before {
+            content: attr(data-placeholder);
+            color: #777;
+            pointer-events: none;
+            display: block; /* Ensures the placeholder is treated as a block for centering */
+        }
+
+        /* Styles for the control panel below the guide box */
+        .controls {
+            background-color: #1a1a1a;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            flex-shrink: 0;
+        }
+
+        /* Styles for buttons */
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+        }
+
+        button:hover {
+            background-color: #0056b3;
+            transform: translateY(-2px);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        /* Specific style for the Clear button */
+        #clearButton {
+            background-color: #dc3545; /* Red for clear action */
+        }
+        #clearButton:hover {
+            background-color: #c82333;
+        }
+
+        /* Slider for speed control */
+        input[type="range"] {
+            width: 100%;
+            -webkit-appearance: none;
+            height: 8px;
+            background: #444;
+            border-radius: 5px;
+            outline: none;
+            transition: opacity .2s;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #007bff;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #007bff;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Speed and Font Size display labels */
+        .control-label {
+            font-size: 14px;
+            color: #bbb;
+            text-align: center;
+            margin-bottom: 5px;
+        }
+
+        /* Responsive layout for smaller screens */
+        @media (max-width: 600px) {
+            .container {
+                padding: 15px;
+            }
+            .controls {
+                padding: 10px;
+            }
+            button {
+                padding: 8px 12px;
+                font-size: 14px;
+            }
+            .guide-box {
+                width: 80vmin;
+                height: calc(80vmin * (2/3));
+            }
+            #teleprompter-text {
+                font-size: 6vmin;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Fixed-size guide box, now the editable input and scrolling area -->
+        <div class="guide-box" id="guideBox">
+            <div id="teleprompter-text" contenteditable="true" data-placeholder="Paste your script here..."></div>
+        </div>
+
+        <div class="controls">
+            <div>
+                <label for="speedRange" class="control-label">Playback Speed: <span id="currentSpeed">17</span></label>
+                <input type="range" id="speedRange" min="10" max="100" value="17">
+            </div>
+            <div>
+                <label for="fontSizeRange" class="control-label">Font Size: <span id="currentFontSize">4</span>vmin</label>
+                <input type="range" id="fontSizeRange" min="2" max="10" value="4" step="0.1">
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button id="startButton">Start</button>
+                <button id="restartButton">Restart</button>
+                <button id="clearButton">Clear</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Get references to DOM elements
+        const speedRange = document.getElementById('speedRange');
+        const currentSpeedDisplay = document.getElementById('currentSpeed');
+        const fontSizeRange = document.getElementById('fontSizeRange');
+        const currentFontSizeDisplay = document.getElementById('currentFontSize');
+        const startButton = document.getElementById('startButton');
+        const restartButton = document.getElementById('restartButton');
+        const clearButton = document.getElementById('clearButton');
+        const teleprompterText = document.getElementById('teleprompter-text');
+        const guideBox = document.getElementById('guideBox');
+
+        let animationFrameId;
+        let lastTimestamp = 0;
+        let scrollPosition = 0;
+        let isPaused = true;
+        let isAtEnd = false;
+
+        // Function to update the displayed speed value
+        function updateSpeedDisplay() {
+            currentSpeedDisplay.textContent = speedRange.value;
+        }
+
+        // Function to update the displayed font size value
+        function updateFontSizeDisplay() {
+            currentFontSizeDisplay.textContent = parseFloat(fontSizeRange.value).toFixed(1);
+            teleprompterText.style.fontSize = `${fontSizeRange.value}vmin`;
+        }
+
+        // Initialize speed and font size displays on load
+        updateSpeedDisplay();
+        updateFontSizeDisplay();
+
+        // Event listeners for speed and font size slider changes
+        speedRange.addEventListener('input', updateSpeedDisplay);
+        fontSizeRange.addEventListener('input', updateFontSizeDisplay);
+
+        // Animation loop for scrolling the text
+        function animateScroll(timestamp) {
+            // Only run the animation if the app is not paused
+            if (!isPaused) {
+                // Initialize the timestamp on the first frame of the animation
+                if (lastTimestamp === 0) {
+                    lastTimestamp = timestamp;
+                }
+
+                // Calculate the time elapsed since the last frame
+                const deltaTime = timestamp - lastTimestamp;
+                lastTimestamp = timestamp;
+
+                const speed = parseInt(speedRange.value, 10);
+                const pixelsPerSecond = speed * 2;
+                const deltaScroll = (deltaTime / 1000) * pixelsPerSecond;
+                scrollPosition += deltaScroll;
+
+                const textHeight = teleprompterText.scrollHeight;
+                const containerHeight = guideBox.clientHeight;
+
+                // Calculate the maximum scroll position where the last line is centered.
+                const maxScrollPosition = textHeight - (containerHeight / 2);
+
+                // Stop scrolling when the end of the text reaches the center of the box
+                if (scrollPosition >= maxScrollPosition) {
+                    // Pin the text at its final position
+                    teleprompterText.style.transform = `translateY(${containerHeight / 2 - maxScrollPosition}px)`;
+                    isAtEnd = true;
+                    pauseTeleprompter();
+                    return;
+                }
+
+                // Apply the transform to move the text upwards from its initial centered position
+                teleprompterText.style.transform = `translateY(${containerHeight / 2 - scrollPosition}px)`;
+
+                animationFrameId = requestAnimationFrame(animateScroll);
+            }
+        }
+
+        // Function to start the teleprompter
+        function startTeleprompter() {
+            // Only start if the app is paused and there's text to scroll
+            if (isPaused && teleprompterText.textContent.trim() !== '') {
+                teleprompterText.contentEditable = 'false'; // Lock editing while scrolling
+                isPaused = false;
+                startButton.textContent = 'Pause'; // Change to pause button
+                // If we're at the end, a start command should act as a restart first
+                if (isAtEnd) {
+                    resetTeleprompter();
+                }
+                lastTimestamp = 0; // Reset timestamp for smooth start
+                // Ensure the container is aligned correctly for scrolling
+                guideBox.classList.remove('empty-state-container');
+                teleprompterText.style.transform = `translateY(${guideBox.clientHeight / 2}px)`;
+                animationFrameId = requestAnimationFrame(animateScroll);
+            } else {
+                pauseTeleprompter();
+            }
+        }
+
+        // Function to pause the teleprompter
+        function pauseTeleprompter() {
+            if (!isPaused) {
+                cancelAnimationFrame(animationFrameId);
+                isPaused = true;
+                startButton.textContent = 'Resume';
+                lastTimestamp = 0; // Reset timestamp to prevent jump on resume
+            }
+        }
+
+        // Centralized function to reset the app state
+        function resetTeleprompter() {
+            pauseTeleprompter();
+            scrollPosition = 0;
+            isAtEnd = false;
+            
+            // Set the contentEditable state
+            teleprompterText.contentEditable = 'true';
+            
+            // Check if the text box is empty and apply the correct class for centering
+            if (teleprompterText.textContent.trim() === '') {
+                guideBox.classList.add('empty-state-container');
+                teleprompterText.style.transform = '';
+            } else {
+                guideBox.classList.remove('empty-state-container');
+                // If there's content, position the first line in the middle
+                teleprompterText.style.transform = `translateY(${guideBox.clientHeight / 2}px)`;
+            }
+
+            startButton.textContent = 'Start'; // Change back to start
+            
+            // Wait a moment for the DOM to update before focusing, preventing the cursor from jumping
+            setTimeout(() => teleprompterText.focus(), 10);
+        }
+
+        // Function to clear the text from the teleprompter box and reset to initial state
+        function clearTeleprompter() {
+            teleprompterText.textContent = '';
+            resetTeleprompter();
+        }
+
+        // Event listeners for control buttons
+        startButton.addEventListener('click', startTeleprompter);
+        restartButton.addEventListener('click', () => {
+            // To restart, we just need to reset the app state without clearing content.
+            // We use setTimeout to ensure the text is rendered before positioning it.
+            setTimeout(resetTeleprompter, 10);
+        });
+        clearButton.addEventListener('click', clearTeleprompter);
+
+        // Custom paste handler to insert plain text and prevent extra lines
+        teleprompterText.addEventListener('paste', (event) => {
+            event.preventDefault();
+            const text = event.clipboardData.getData('text/plain');
+            document.execCommand('insertText', false, text);
+            // After pasting, reset the scroll position and state
+            setTimeout(() => {
+                resetTeleprompter();
+            }, 10);
+        });
+
+        // Event listener to handle text input and update the transform
+        teleprompterText.addEventListener('input', () => {
+            if (teleprompterText.textContent.trim() !== '') {
+                guideBox.classList.remove('empty-state-container');
+                teleprompterText.style.transform = `translateY(${guideBox.clientHeight / 2}px)`;
+            } else {
+                guideBox.classList.add('empty-state-container');
+                teleprompterText.style.transform = '';
+            }
+        });
+
+        // Add a simple alert replacement
+        function alert(message) {
+            const existingAlert = document.getElementById('customAlert');
+            if (existingAlert) existingAlert.remove();
+
+            const alertBox = document.createElement('div');
+            alertBox.id = 'customAlert';
+            alertBox.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background-color: #333;
+                color: white;
+                padding: 20px;
+                border-radius: 10px;
+                box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+                z-index: 1000;
+                text-align: center;
+                font-size: 18px;
+                animation: fadeIn 0.3s ease-out;
+            `;
+            alertBox.textContent = message;
+            document.body.appendChild(alertBox);
+
+            const styleSheet = document.createElement('style');
+            styleSheet.innerHTML = `
+                @keyframes fadeIn {
+                    from { opacity: 0; transform: translate(-50%, -60%); }
+                    to { opacity: 1; transform: translate(-50%, -50%); }
+                }
+                @keyframes fadeOut {
+                    from { opacity: 1; transform: translate(-50%, -50%); }
+                    to { opacity: 0; transform: translate(-50%, -60%); }
+                }
+            `;
+            document.head.appendChild(styleSheet);
+
+            setTimeout(() => {
+                alertBox.style.animation = 'fadeOut 0.3s ease-in forwards';
+                alertBox.addEventListener('animationend', () => alertBox.remove());
+            }, 3000);
+        }
+
+        // Initial setup for the contenteditable div
+        window.onload = function () {
+            // Start the app in a clean, cleared state
+            clearTeleprompter();
+        };
+    </script>
+</body>
+</html>
