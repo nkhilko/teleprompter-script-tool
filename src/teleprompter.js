@@ -1,8 +1,3 @@
----
-
-# 2) `src/teleprompter.js`
-
-```javascript
 /* Teleprompter Script Tool — readable source
    Author: Nikita Khilko (nkhilko)
    License: MIT
@@ -96,6 +91,9 @@
     container: root.querySelector(".nk-container"),
   };
 
+  const listeners = new AbortController();
+  const listenerOptions = { signal: listeners.signal };
+
   // ---- State
   const st = {
     playing: false,
@@ -140,6 +138,8 @@
   }
   function pause() {
     st.playing = false;
+    cancelAnimationFrame(st.raf);
+    st.raf = null;
   }
   function rewind() {
     st.y = 0;
@@ -183,7 +183,13 @@
   }
 
   function onKey(e) {
+    if (e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
     const k = e.key.toLowerCase();
+    if (e.target instanceof Element && (e.target.isContentEditable || e.target.closest("input, textarea, select"))) {
+      if (e.target === els.textarea && k === "escape") toggleEditor(false);
+      return;
+    }
+    if (e.target instanceof HTMLButtonElement && k === " ") return;
     if (k === " ") {
       e.preventDefault();
       st.playing ? pause() : play();
@@ -216,15 +222,15 @@
       const r = box.getBoundingClientRect();
       sl = r.left; stp = r.top;
       e.preventDefault();
-    });
+    }, listenerOptions);
     document.addEventListener("mousemove", (e) => {
       if (!drag) return;
       const dx = e.clientX - sx, dy = e.clientY - sy;
       box.style.position = "fixed";
       box.style.left = Math.max(8, sl + dx) + "px";
       box.style.top = Math.max(8, stp + dy) + "px";
-    });
-    document.addEventListener("mouseup", () => (drag = false));
+    }, listenerOptions);
+    document.addEventListener("mouseup", () => (drag = false), listenerOptions);
   }
 
   function cleanup() {
@@ -232,11 +238,11 @@
     root.remove();
     const s = document.getElementById("nk-teleprompter-css");
     if (s) s.remove();
-    document.removeEventListener("keydown", onKey);
+    listeners.abort();
   }
 
-  root.addEventListener("click", onClick);
-  document.addEventListener("keydown", onKey);
+  root.addEventListener("click", onClick, listenerOptions);
+  document.addEventListener("keydown", onKey, listenerOptions);
   makeDraggable(els.header, els.container);
 
   render();
