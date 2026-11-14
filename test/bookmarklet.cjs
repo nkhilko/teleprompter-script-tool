@@ -17,14 +17,20 @@ async function run() {
     const context = await browser.newContext({ serviceWorkers: "block", permissions: ["clipboard-read", "clipboard-write"] });
     const page = await context.newPage();
     const unexpected = [];
+    const errors = [];
+    page.on("pageerror", error => errors.push(error.message));
+    const standalone = fs.readFileSync(path.join(repo, "demo/Improved_Teleprompter_App.html"), "utf8");
     await context.route("**/*", route => {
-      if (route.request().url() !== "http://teleprompter.test/") {
+      if (route.request().url() === "https://teleprompter.test/standalone") {
+        return route.fulfill({ contentType: "text/html", body: standalone });
+      }
+      if (route.request().url() !== "https://teleprompter.test/") {
         unexpected.push(route.request().url());
         return route.abort();
       }
       return route.fulfill({ contentType: "text/html", body: '<a id="install">Open teleprompter</a>' });
     });
-    await page.goto("http://teleprompter.test/");
+    await page.goto("https://teleprompter.test/");
     await page.locator("#install").evaluate((el, url) => el.href = url, bookmarklet);
     const overlay = page.locator("#nk-teleprompter");
     const action = name => overlay.locator(`[data-act="${name}"]`);
@@ -53,10 +59,28 @@ async function run() {
     assert.equal(await overlay.count(), 0);
     assert.equal(await page.locator("#nk-teleprompter-css").count(), 0);
     await page.locator("#install").click();
+    await overlay.waitFor({ state: "attached" });
     assert.equal(await overlay.count(), 1);
     await action("cancel").click();
     await action("close").click();
+    await page.goto("https://teleprompter.test/standalone");
+    const standaloneEditor = page.locator("#teleprompter-text");
+    await standaloneEditor.focus();
+    await page.evaluate(text => navigator.clipboard.writeText(text), text);
+    await page.keyboard.press("Control+v");
+    assert.equal(await standaloneEditor.innerText(), text);
+    const start = page.locator("#startButton");
+    await start.click();
+    assert.equal(await start.innerText(), "Pause");
+    await start.click();
+    assert.equal(await start.innerText(), "Resume");
+    await page.locator("#restartButton").click();
+    await page.waitForFunction(() => document.getElementById("startButton").textContent === "Start");
+    assert.equal(await standaloneEditor.innerText(), text);
+    await page.locator("#clearButton").click();
+    assert.equal(await standaloneEditor.innerText(), "");
     assert.deepEqual(unexpected, []);
+    assert.deepEqual(errors, []);
   } finally {
     await browser.close();
   }

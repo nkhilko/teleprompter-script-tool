@@ -23,6 +23,6 @@ node --check src/teleprompter.js
 node build-bookmarklet.mjs > bookmarklet.txt
 ```
 
-The generated URL contains the maintained source directly. The smoke test uses synthetic content. Run it in Chromium and verify installation in native Safari before claiming browser compatibility.
+The generated URL contains the maintained source directly. The smoke test covers both the bookmarklet and the standalone page with synthetic content. It passed on Chromium 141. Installing and running the bookmarklet in native Safari still needs verification.
 
 With Playwright and Chromium available, run `node test/bookmarklet.cjs`. Set `CHROMIUM_PATH` if using a system Chromium installation.
